@@ -16,7 +16,7 @@
 
   /* ---- EDIT BEFORE DEPLOYING -------------------------------------------- */
   var CONFIG = {
-    SECRET: "CHANGE-ME-before-you-deploy-2f9c",   // must match grader/config.json
+    SECRET: "openssl rand -hex 24",   // must match grader/config.json
     FLAG_PREFIX: "CCNST",
     CASE_ID: "CCNST-2026-0928",
     COURSE: "Network Forensics",
