@@ -406,7 +406,7 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
 (function(){
   "use strict";
   var C = window.CASE;
-  if(!C){ document.body.innerHTML = "<p style='font-family:monospace;padding:40px;color:#e89b94'>Could not load midterm_case.js / shared_hash.js. Keep all three files in the same folder.</p>"; return; }
+  if(!C){ document.body.innerHTML = "<p style='font-family:monospace;padding:40px;color:#e89b94'>Could not load case.js / shared_hash.js. Keep all three files in the same folder.</p>"; return; }
 
   var $ = function(s){ return document.querySelector(s); };
   var state = {
@@ -561,7 +561,7 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
         '<div class="step-k">OBJECTIVE '+(state.activeIdx+1)+' / '+TOTAL+' · WEEK '+s.week+'</div>'+
         '<div class="title">'+esc(s.title)+'</div>'+
         '<div class="hint">'+esc(s.hint)+'</div>'+
-        (s.file ? '<div class="where">start here → <a data-open="'+s.file+'">'+s.file+'</a></div>' : '')+
+        ((s.guided && s.file) ? '<div class="where">start here → <a data-open="'+s.file+'">'+s.file+'</a></div>' : '')+
       '</div>';
     var a = host.querySelector("[data-open]");
     if(a) a.addEventListener("click", function(){ openFile(a.dataset.open); });
@@ -578,7 +578,7 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
       li.className = cls;
       // reached steps are clickable to re-read their objective/file
       var reached = state.captured[s.id] || i <= state.activeIdx;
-      if(reached && s.file){ li.classList.add("clickable"); li.addEventListener("click", function(){ openFile(s.file); }); }
+      if(reached && s.guided && s.file){ li.classList.add("clickable"); li.addEventListener("click", function(){ openFile(s.file); }); }
       li.innerHTML =
         '<span class="dot">'+(state.captured[s.id]?"✓":(i>state.activeIdx?"":""))+'</span>'+
         '<span>'+esc(s.title)+'</span>'+
@@ -661,8 +661,8 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
   function redirect(active){
     if(active.id==="exfil") return "the exfiltration is the single <b>large</b> one-shot transfer — sort the NetFlow by bytes.";
     if(active.id==="beacon") return "the beacon is the <b>small, regular</b> repeated flow — not the big transfer.";
-    if(active.file) return "look in <b>"+active.file+"</b>.";
-    return "re-read the objective above.";
+    if(active.guided && active.file) return "look in <b>"+active.file+"</b>.";
+    return "re-read the objective above and work out which evidence answers it.";
   }
 
   function lookupDecoy(v){
