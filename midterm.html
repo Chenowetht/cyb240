@@ -126,6 +126,12 @@ a{color:var(--active)}
 .objective .step-k{font-family:var(--mono); font-size:11.5px; color:var(--active); font-weight:600; margin-bottom:5px}
 .objective .title{font-weight:700; font-size:15.5px; margin-bottom:7px}
 .objective .hint{font-size:13.5px; color:#cdd6dd; line-height:1.62}
+.objective .ask{
+  margin-top:11px; padding:9px 11px; background:var(--console-3);
+  border:1px solid var(--line-2); border-radius:3px;
+  font-size:13px; color:var(--ink); font-weight:500;
+}
+.objective .ask::before{content:"▸ "; color:var(--active)}
 .objective .where{
   margin-top:11px; font-family:var(--mono); font-size:12px; color:var(--muted);
   display:flex; align-items:center; gap:7px;
@@ -149,6 +155,8 @@ a{color:var(--active)}
 .steps li.active{color:var(--ink)}
 .steps li.active .dot{border-color:var(--active); box-shadow:0 0 0 3px rgba(80,176,163,.15)}
 .steps li.locked{opacity:.5}
+.steps li.skipped{color:var(--muted)}
+.steps li.skipped .dot{border-color:var(--seal); color:var(--seal)}
 .steps li .wk{margin-left:auto; font-family:var(--mono); font-size:10.5px; color:var(--faint)}
 .steps li.clickable{cursor:pointer}
 .steps li.clickable:hover{background:var(--console-3)}
@@ -221,6 +229,38 @@ a{color:var(--active)}
   padding:11px 20px; border-radius:2px; cursor:pointer; font-size:14px;
 }
 .sbtn:hover{background:#63c0b3}
+.skipbtn{
+  background:transparent; border:1px solid var(--line-2); color:var(--muted);
+  padding:11px 14px; border-radius:2px; cursor:pointer; font-size:13px;
+}
+.skipbtn:hover{border-color:var(--active-dim); color:var(--ink)}
+.skipbtn:disabled{opacity:.4; cursor:default}
+.skipbtn:disabled:hover{border-color:var(--line-2); color:var(--muted)}
+
+/* per-objective reasoning box */
+.objective .reason{margin-top:12px}
+.objective .reason label{
+  display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted); margin-bottom:5px;
+}
+.objective .reason label span{text-transform:none; letter-spacing:0; color:var(--faint); font-weight:400}
+.objective .reason textarea{
+  width:100%; min-height:72px; resize:vertical; box-sizing:border-box;
+  background:var(--console-3); border:1px solid var(--line-2); border-radius:3px;
+  color:var(--ink); font-family:inherit; font-size:13px; line-height:1.5; padding:8px 10px;
+}
+.objective .reason textarea:focus{border-color:var(--active); outline:none; box-shadow:0 0 0 3px rgba(80,176,163,.12)}
+.objective .reason .saved{font-family:var(--mono); font-size:10px; color:var(--active); margin-top:4px; height:12px; opacity:0; transition:opacity .2s}
+.objective .reason .saved.on{opacity:.9}
+
+/* summary box in export dialog */
+.sumbox{margin:4px 0 14px}
+.sumbox label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:6px}
+.sumbox textarea{
+  width:100%; min-height:90px; resize:vertical; box-sizing:border-box;
+  background:#fff; border:1px solid #d9cfb8; border-radius:4px;
+  font-family:inherit; font-size:13px; line-height:1.55; padding:9px 11px; color:#2a2a28;
+}
 .progress{display:flex; align-items:center; gap:11px; min-width:200px}
 .bar{flex:1; height:7px; background:var(--console); border:1px solid var(--line); border-radius:4px; overflow:hidden; min-width:90px}
 .bar span{display:block; height:100%; width:0; background:var(--seal); transition:width .5s cubic-bezier(.2,.7,.2,1)}
@@ -322,7 +362,7 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
     </div>
 
     <div class="gatefoot">
-      Your evidence tags are generated from your examiner ID, so every examiner's case tags are different. Sign in with the <b>same ID you will submit under</b> — tags from a different ID will not grade as yours.
+      Your progress is recorded under your student ID, and the findings you confirm are logged privately to that ID. Sign in with the <b>same ID you will submit under</b>.
       <div class="chain"><span id="g-fp">config —</span><span>·</span><span id="g-team">Cochise College Network Security Team</span></div>
     </div>
   </div>
@@ -367,12 +407,13 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
   <div class="dock">
     <div class="field">
       <input id="flagInput" type="text" autocomplete="off" spellcheck="false"
-             placeholder="Submit a case tag you found —  CCNST{...}" aria-label="Submit a flag">
-      <button class="sbtn" id="submitFlag">Submit tag</button>
+             placeholder="Enter the finding your objective asks for" aria-label="Submit your finding for the current objective">
+      <button class="sbtn" id="submitFlag">Submit finding</button>
+      <button class="skipbtn" id="skipStep" title="Move on and come back later — your reasoning is still saved">Skip for now</button>
     </div>
     <div class="progress">
       <div class="bar" aria-hidden="true"><span id="bar"></span></div>
-      <span class="count"><b id="c-found">0</b>/<span id="c-total">15</span> tags</span>
+      <span class="count"><b id="c-found">0</b>/<span id="c-total">15</span> found</span>
     </div>
     <button class="exbtn" id="openExport" style="font-size:13px;padding:9px 14px">Export submission</button>
     <div id="feedback" role="status" aria-live="polite"></div>
@@ -391,17 +432,22 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
   <div class="dlg-h"><h2>Export submission</h2><button class="x" id="exClose" aria-label="Close">×</button></div>
   <div class="dlg-b">
     <div class="warnrow" id="exWarn"></div>
-    <p>Hand this JSON file to your instructor as directed. It records only the tags you've captured, under examiner <b id="ex-id-note"></b>.</p>
+    <p>Hand the <b>.json</b> file to your instructor as directed. It records your confirmed findings and your written reasoning for examiner <b id="ex-id-note"></b>.</p>
+    <div class="sumbox">
+      <label for="summaryInput">Analyst summary (optional) — in a few sentences, what happened and how you know. Included in your submission.</label>
+      <textarea id="summaryInput" spellcheck="true" placeholder="e.g. A rogue host on the Library VLAN authenticated as jturner off-hours, beaconed to a C2 host, then moved ~48MB to an external bucket; I correlated the IDS alert to the firewall allow by converting MST to UTC\u2026"></textarea>
+    </div>
     <textarea id="exText" readonly aria-label="Submission JSON"></textarea>
   </div>
   <div class="dlg-f">
     <button class="btn2" id="exDownload">Download .json</button>
     <button class="btn2 ghost" id="exCopy">Copy to clipboard</button>
+    <button class="btn2 ghost" id="exReport">Download report (.html)</button>
   </div>
 </dialog>
 
-<script src="midterm_shared_hash.js"></script>
-<script src="midterm_case.js"></script>
+<script src="shared_hash.js"></script>
+<script src="case.js"></script>
 <script>
 (function(){
   "use strict";
@@ -411,9 +457,12 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
   var $ = function(s){ return document.querySelector(s); };
   var state = {
     id:"", norm:"",
-    flags:{},        // stepId -> flag value for this examiner
-    byValue:{},      // flag value -> stepId
+    flags:{},        // stepId -> this examiner's flag (recorded on a correct finding)
     captured:{},     // stepId -> true
+    skipped:{},      // stepId -> true (moved past without solving)
+    notes:{},        // stepId -> reasoning text (saved even when unsolved)
+    summary:"",      // overall analyst summary
+    reachedMax:0,    // highest objective index the examiner has reached
     activeIdx:0,     // index of current objective step
     curFile:null
   };
@@ -422,13 +471,20 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
   /* ---------- persistence (graceful; off on file:// if blocked) ---------- */
   function storeKey(){ return "ccnst-"+C.CONFIG.CASE_ID+"-"+state.norm; }
   function save(){
-    try{ localStorage.setItem(storeKey(), JSON.stringify({captured:state.captured, activeIdx:state.activeIdx})); }catch(e){}
+    try{ localStorage.setItem(storeKey(), JSON.stringify({
+      captured:state.captured, skipped:state.skipped, notes:state.notes,
+      summary:state.summary, reachedMax:state.reachedMax, activeIdx:state.activeIdx
+    })); }catch(e){}
   }
   function load(){
     try{
       var raw = localStorage.getItem(storeKey()); if(!raw) return;
       var d = JSON.parse(raw);
-      if(d && d.captured){ state.captured = d.captured; state.activeIdx = d.activeIdx||0; }
+      if(d && d.captured){
+        state.captured = d.captured; state.activeIdx = d.activeIdx||0;
+        state.skipped = d.skipped||{}; state.notes = d.notes||{};
+        state.summary = d.summary||""; state.reachedMax = d.reachedMax||0;
+      }
     }catch(e){}
   }
 
@@ -447,10 +503,10 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
     var n = C.norm(raw);
     if(!n){ $("#idInput").focus(); return; }
     state.id = raw.trim(); state.norm = n;
-    state.flags = C.allFlags(raw);
-    state.byValue = {};
-    STEPS.forEach(function(s){ state.byValue[state.flags[s.id]] = s.id; });
-    state.captured = {}; state.activeIdx = 0; state.curFile = null;
+    state.flags = {};             // filled per step as findings are confirmed
+    state.captured = {}; state.skipped = {}; state.notes = {};
+    state.summary = ""; state.reachedMax = 0;
+    state.activeIdx = 0; state.curFile = null;
     load();                       // resume if this examiner worked before
     recomputeActive();
     $("#gate").style.display = "none";
@@ -473,12 +529,15 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
     updateProgress();
 
     $("#submitFlag").addEventListener("click", doSubmit);
+    $("#skipStep").addEventListener("click", skipStep);
     $("#flagInput").addEventListener("keydown", function(e){ if(e.key==="Enter") doSubmit(); });
     $("#switchEx").addEventListener("click", switchExaminer);
     $("#openExport").addEventListener("click", openExport);
     $("#exClose").addEventListener("click", function(){ $("#export").close(); });
     $("#exDownload").addEventListener("click", downloadJSON);
     $("#exCopy").addEventListener("click", copyJSON);
+    $("#exReport").addEventListener("click", downloadReport);
+    $("#summaryInput").addEventListener("input", function(){ state.summary = $("#summaryInput").value; save(); refreshExportJSON(); });
     $("#tab-nav").addEventListener("click", function(){ setTab("nav"); });
     $("#tab-view").addEventListener("click", function(){ setTab("view"); });
     $("#flagInput").focus();
@@ -517,54 +576,96 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
     $("#v-path").innerHTML = '<span class="pf">'+pf.join("/")+'/</span>'+name;
     var raw = C.renderFile(path, state.id);
     $("#paper").innerHTML = '<div class="sheet" id="sheet"></div>';
-    $("#sheet").innerHTML = markupTags(raw);
-    // tag count in header
-    var tags = $("#sheet").querySelectorAll(".tag").length;
-    $("#v-tagn").innerHTML = tags ? ('candidate tags here: <b>'+tags+'</b>') : '';
+    $("#sheet").textContent = raw;
+    $("#v-tagn").innerHTML = '';
     if(document.body.classList.contains("show-nav") || !document.body.classList.contains("show-viewer")){
       setTab("view");
     }
   }
 
-  // escape, then wrap CCNST{...} candidate tags; mark captured ones
-  function markupTags(text){
-    var esc = text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
-    var re = new RegExp(C.CONFIG.FLAG_PREFIX.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\{[^}]+\\}","g");
-    return esc.replace(re, function(m){
-      var got = state.captured[ state.byValue[m] ] ? " got" : "";
-      return '<span class="tag'+got+'">'+m+'</span>';
-    });
-  }
-
   /* ---------------------------- objective + steps ---------------------------- */
   function recomputeActive(){
-    // active objective = first step not yet captured
-    var i = 0; while(i < TOTAL && state.captured[STEPS[i].id]) i++;
+    // next objective = first step that is neither solved nor skipped;
+    // if none, revisit the first skipped-but-unsolved; else the case is complete.
+    var i = 0; while(i < TOTAL && (state.captured[STEPS[i].id] || state.skipped[STEPS[i].id])) i++;
+    if(i >= TOTAL){
+      i = 0; while(i < TOTAL && state.captured[STEPS[i].id]) i++; // first unsolved (a skipped one) or TOTAL
+    }
     state.activeIdx = i;
+    markReached();
+  }
+  function markReached(){
+    if(state.activeIdx < TOTAL && state.activeIdx > state.reachedMax) state.reachedMax = state.activeIdx;
+  }
+  function openCount(){ // skipped-but-unsolved objectives still awaiting a finding
+    return STEPS.filter(function(s){ return state.skipped[s.id] && !state.captured[s.id]; }).length;
+  }
+  function focusStep(i){        // revisit an already-reached objective
+    state.activeIdx = i;
+    renderSteps(); renderObjective();
+    if(STEPS[i].guided && STEPS[i].file) openFile(STEPS[i].file);
   }
 
   function renderObjective(){
     var host = $("#objective");
+    var solved = Object.keys(state.captured).length;
     if(state.activeIdx >= TOTAL){
-      host.className = ""; // reset
+      var open = openCount();
+      host.className = "";
       host.innerHTML =
         '<div class="objective alldone">'+
-          '<div class="step-k">CASE COMPLETE · '+TOTAL+'/'+TOTAL+' TAGS</div>'+
-          '<div class="title">All evidence tags captured</div>'+
-          '<div class="hint">Every objective is closed. Export your submission from the dock below and hand it to your instructor. You can re-open any file to review your findings.</div>'+
+          '<div class="step-k">'+(solved===TOTAL ? "CASE COMPLETE · " : "ALL OBJECTIVES REACHED · ")+solved+'/'+TOTAL+' SOLVED</div>'+
+          '<div class="title">'+(solved===TOTAL ? "All findings recorded" : "Findings recorded where solved")+'</div>'+
+          '<div class="hint">'+
+            (open>0
+              ? 'You skipped <b>'+open+'</b> objective'+(open>1?'s':'')+' — they\u2019re marked in the list above; click one to go back and try its finding. '
+              : '')+
+            'Write an analyst summary and export your submission from the dock below. Your reasoning on every objective is saved and included — if a finding is wrong but your logic is sound, your instructor can still award credit.'+
+          '</div>'+
         '</div>';
+      setAsk(null);
       return;
     }
     var s = STEPS[state.activeIdx];
+    var revisiting = state.captured[s.id] || state.skipped[s.id];
     host.innerHTML =
       '<div class="objective">'+
-        '<div class="step-k">OBJECTIVE '+(state.activeIdx+1)+' / '+TOTAL+' · WEEK '+s.week+'</div>'+
+        '<div class="step-k">OBJECTIVE '+(state.activeIdx+1)+' / '+TOTAL+' · WEEK '+s.week+
+          (state.captured[s.id] ? ' · <span style="color:var(--active)">SOLVED</span>' : (state.skipped[s.id] ? ' · <span style="color:var(--seal)">SKIPPED</span>' : ''))+'</div>'+
         '<div class="title">'+esc(s.title)+'</div>'+
         '<div class="hint">'+esc(s.hint)+'</div>'+
+        '<div class="ask">'+esc(s.prompt)+'</div>'+
         ((s.guided && s.file) ? '<div class="where">start here → <a data-open="'+s.file+'">'+s.file+'</a></div>' : '')+
+        '<div class="reason">'+
+          '<label for="noteInput">Your reasoning <span>— what did you check, and why? (counts toward your report)</span></label>'+
+          '<textarea id="noteInput" spellcheck="true" placeholder="e.g. Checked dhcp.log for a lease whose MAC wasn\u2019t in the 00:1b:44 managed range\u2026"></textarea>'+
+          '<div class="saved" id="noteSaved">saved</div>'+
+        '</div>'+
       '</div>';
     var a = host.querySelector("[data-open]");
     if(a) a.addEventListener("click", function(){ openFile(a.dataset.open); });
+    // wire the reasoning box (no re-render on input, so focus is preserved)
+    var ta = $("#noteInput");
+    ta.value = state.notes[s.id] || "";
+    ta.addEventListener("input", function(){ onNote(s.id, ta.value); });
+    setAsk(s.prompt);
+  }
+
+  var noteTimer=null;
+  function onNote(stepId, val){
+    state.notes[stepId] = val;
+    if(noteTimer) clearTimeout(noteTimer);
+    noteTimer = setTimeout(function(){
+      save();
+      var tag=$("#noteSaved"); if(tag){ tag.classList.add("on"); setTimeout(function(){ tag.classList.remove("on"); }, 900); }
+    }, 350);
+  }
+
+  function setAsk(prompt){
+    var inp = $("#flagInput"), skip = $("#skipStep");
+    inp.placeholder = prompt ? prompt : "All objectives reached — nothing to submit here";
+    inp.disabled = !prompt;
+    if(skip) skip.disabled = !prompt;
   }
 
   function renderSteps(){
@@ -573,14 +674,16 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
       var li = document.createElement("li");
       var cls = "";
       if(state.captured[s.id]) cls = "done";
+      else if(state.skipped[s.id]) cls = "skipped";
       else if(i === state.activeIdx) cls = "active";
-      else if(i > state.activeIdx) cls = "locked";
+      else if(i > state.reachedMax) cls = "locked";
       li.className = cls;
-      // reached steps are clickable to re-read their objective/file
-      var reached = state.captured[s.id] || i <= state.activeIdx;
-      if(reached && s.guided && s.file){ li.classList.add("clickable"); li.addEventListener("click", function(){ openFile(s.file); }); }
+      // any reached objective (solved, skipped, or already visited) can be re-opened
+      var reached = state.captured[s.id] || state.skipped[s.id] || i <= state.reachedMax;
+      if(reached){ li.classList.add("clickable"); li.addEventListener("click", function(){ focusStep(i); }); }
+      var mark = state.captured[s.id] ? "✓" : (state.skipped[s.id] ? "–" : "");
       li.innerHTML =
-        '<span class="dot">'+(state.captured[s.id]?"✓":(i>state.activeIdx?"":""))+'</span>'+
+        '<span class="dot">'+mark+'</span>'+
         '<span>'+esc(s.title)+'</span>'+
         '<span class="wk">w'+s.week+'</span>';
       ol.appendChild(li);
@@ -597,78 +700,45 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
   function doSubmit(){
     var raw = $("#flagInput").value.trim();
     if(!raw){ return; }
+    if(state.activeIdx >= TOTAL){ return; }
     var fb = $("#feedback");
     var active = STEPS[state.activeIdx];
+    if(state.captured[active.id]){ say(fb,"nudge","You already solved <b>"+esc(active.title)+"</b>. Pick another objective from the list, or export your submission."); clearInput(); return; }
+    var res = C.check(active.id, raw);
 
-    // 1) a valid tag for THIS examiner?
-    var stepId = state.byValue[raw];
-    if(stepId){
-      if(state.captured[stepId]){
-        var st = stepById(stepId);
-        if(active && stepId !== active.id){
-          say(fb,"nudge","Already captured — that's the <b>"+esc(st.title)+"</b> tag ("+st.skill+"). Your current objective is <b>"+esc(active.title)+"</b>; "+redirect(active));
-        } else {
-          say(fb,"nudge","You already captured the <b>"+esc(st.title)+"</b> tag.");
-        }
-        clearInput(); return;
-      }
-      capture(stepId, active);
-      clearInput(); return;
-    }
-
-    // 2) a known decoy for some step?
-    var decoyMsg = lookupDecoy(raw);
-    if(decoyMsg){ say(fb,"nudge", esc(decoyMsg)); clearInput(false); return; }
-
-    // 3) right format, wrong examiner / wrong case
-    var re = new RegExp("^"+C.CONFIG.FLAG_PREFIX.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")+"\\{.+\\}$");
-    if(re.test(raw)){
-      say(fb,"bad","That tag isn't valid for examiner <b>"+esc(state.norm)+"</b>. Tags are unique per examiner — if you copied it from someone else or signed in with a different ID, it won't match. Re-open the case under your own student ID.");
-      clearInput(false); return;
-    }
-
-    // 4) not a tag at all
-    say(fb,"bad","That doesn't look like a case tag. Tags look like <b>"+C.CONFIG.FLAG_PREFIX+"{step_…}</b> and appear on the right line of the right file.");
-    clearInput(false);
+    if(res.status === "correct"){ capture(active.id); clearInput(); return; }
+    if(res.status === "decoy"){ say(fb,"nudge", esc(res.msg)); clearInput(); return; }
+    say(fb,"bad","Not quite. That isn't the finding this objective is after — re-read the objective, work the evidence, and try again. (You're looking for: "+esc(active.prompt)+") You can also jot your reasoning and <b>Skip for now</b>.");
+    clearInput();
   }
 
-  function capture(stepId, active){
+  function capture(stepId){
     state.captured[stepId] = true;
+    delete state.skipped[stepId];
+    state.flags[stepId] = state.flags[stepId] || C.flagFor(state.id, stepId);
     recomputeActive();
     renderSteps(); renderObjective(); updateProgress(); save();
-    // re-highlight current file (captured tag turns green)
-    if(state.curFile) refreshTags();
     flashStamp();
     var st = stepById(stepId), fb = $("#feedback");
-    if(active && stepId !== active.id){
-      // captured a tag that wasn't the current objective (out-of-order / cross-step)
-      say(fb,"ok","Captured <b>"+esc(st.title)+"</b> ("+st.skill+"). That wasn't your current objective ("+esc(active.title)+") — it still counts. Objective advanced to the next open step.");
-    } else {
-      say(fb,"ok","Captured <b>"+esc(st.title)+"</b>. "+ (state.activeIdx>=TOTAL
-        ? "That was the last tag — the case is complete. Export your submission below."
-        : "Next objective: <b>"+esc(STEPS[state.activeIdx].title)+"</b>."));
-    }
+    var done = Object.keys(state.captured).length;
+    say(fb,"ok","Correct — <b>"+esc(st.title)+"</b> recorded. "+ (state.activeIdx>=TOTAL
+      ? (done===TOTAL ? "That was the last objective — the case is complete. Export your submission below."
+                      : "All objectives reached. Revisit any you skipped from the list, or export below.")
+      : "Next objective: <b>"+esc(STEPS[state.activeIdx].title)+"</b>."));
   }
 
-  function refreshTags(){
-    var sheet = $("#sheet"); if(!sheet) return;
-    sheet.querySelectorAll(".tag").forEach(function(sp){
-      var v = sp.textContent.replace(/\s*✓$/,"");
-      if(state.captured[ state.byValue[v] ]) sp.classList.add("got");
-    });
-  }
-
-  function redirect(active){
-    if(active.id==="exfil") return "the exfiltration is the single <b>large</b> one-shot transfer — sort the NetFlow by bytes.";
-    if(active.id==="beacon") return "the beacon is the <b>small, regular</b> repeated flow — not the big transfer.";
-    if(active.guided && active.file) return "look in <b>"+active.file+"</b>.";
-    return "re-read the objective above and work out which evidence answers it.";
-  }
-
-  function lookupDecoy(v){
-    var D = C.DECOYS || {};
-    for(var step in D){ if(D[step][v]) return D[step][v]; }
-    return null;
+  function skipStep(){
+    if(state.activeIdx >= TOTAL) return;
+    var s = STEPS[state.activeIdx];
+    if(state.captured[s.id]){ return; }
+    state.skipped[s.id] = true;
+    recomputeActive();
+    renderSteps(); renderObjective(); save();
+    var fb = $("#feedback");
+    say(fb,"nudge","Skipped <b>"+esc(s.title)+"</b> for now — your reasoning is saved. "+ (state.activeIdx>=TOTAL
+      ? "You've reached the end; click a skipped objective in the list to come back to it."
+      : "You can return to it anytime from the list."));
+    clearInput();
   }
 
   function stepById(id){ for(var i=0;i<TOTAL;i++) if(STEPS[i].id===id) return STEPS[i]; return null; }
@@ -680,15 +750,26 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
 
   function flashStamp(){
     var f = document.createElement("div");
-    f.className = "flash"; f.textContent = "TAG CAPTURED";
+    f.className = "flash"; f.textContent = "FINDING LOGGED";
     document.body.appendChild(f);
     setTimeout(function(){ f.remove(); }, 650);
   }
 
   /* ---------------------------- export ---------------------------- */
   function buildSubmission(){
-    var flags = {};
-    STEPS.forEach(function(s){ if(state.captured[s.id]) flags[s.id] = state.flags[s.id]; });
+    var flags = {}, steps = {};
+    STEPS.forEach(function(s){
+      if(state.captured[s.id]) flags[s.id] = C.flagFor(state.id, s.id);
+      var note = (state.notes[s.id]||"").trim();
+      if(state.captured[s.id] || state.skipped[s.id] || note){
+        steps[s.id] = {
+          title: s.title, week: s.week,
+          solved: !!state.captured[s.id],
+          skipped: !!state.skipped[s.id] && !state.captured[s.id],
+          reasoning: note
+        };
+      }
+    });
     return {
       student_id: state.id,
       case_id: C.CONFIG.CASE_ID,
@@ -696,23 +777,28 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
       generated: new Date().toISOString(),
       captured: Object.keys(flags).length,
       total: TOTAL,
-      flags: flags
+      flags: flags,
+      report: { summary: (state.summary||"").trim(), steps: steps }
     };
   }
+  function refreshExportJSON(){ $("#exText").value = JSON.stringify(buildSubmission(), null, 2); }
   function openExport(){
     var sub = buildSubmission();
+    $("#summaryInput").value = state.summary || "";
     $("#exText").value = JSON.stringify(sub, null, 2);
     $("#ex-id-note").textContent = state.norm;
     var n = sub.captured, w = $("#exWarn");
+    var noted = Object.keys(sub.report.steps).filter(function(k){ return sub.report.steps[k].reasoning; }).length;
     if(n < TOTAL){
       w.style.display="block";
-      w.innerHTML = "You've captured <b>"+n+" of "+TOTAL+"</b> tags. You can export now and submit again later — but only captured tags are included.";
+      w.innerHTML = "You have <b>"+n+" of "+TOTAL+"</b> findings recorded"+(noted?(" and reasoning on <b>"+noted+"</b> objective"+(noted>1?"s":"")):"")+". You can hand this in as-is — your instructor can award credit for sound reasoning on objectives you didn't fully solve.";
     } else { w.style.display="none"; }
     var dlg = $("#export");
     if(typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open","");
   }
   function fileName(){ return "submission_"+state.norm+"_"+C.CONFIG.CASE_ID+".json"; }
   function downloadJSON(){
+    refreshExportJSON();
     var blob = new Blob([$("#exText").value], {type:"application/json"});
     var a = document.createElement("a");
     a.href = URL.createObjectURL(blob); a.download = fileName();
@@ -720,10 +806,44 @@ dialog#export::backdrop{background:rgba(8,11,14,.72)}
     setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
   }
   function copyJSON(){
+    refreshExportJSON();
     var t = $("#exText"); t.select();
     try{ navigator.clipboard.writeText(t.value); }catch(e){ try{ document.execCommand("copy"); }catch(_){} }
     var b = $("#exCopy"), old = b.textContent; b.textContent = "Copied ✓";
     setTimeout(function(){ b.textContent = old; }, 1400);
+  }
+  function downloadReport(){
+    var sub = buildSubmission(), esc2 = function(x){ return String(x==null?"":x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); };
+    var rows = STEPS.map(function(s,i){
+      var r = sub.report.steps[s.id];
+      var status = r && r.solved ? '<span style="color:#1f7a5c">Solved</span>'
+                 : (r && r.skipped ? '<span style="color:#b4472e">Skipped</span>'
+                 : '<span style="color:#8a8275">Not reached</span>');
+      var reason = r && r.reasoning ? esc2(r.reasoning) : '<em style="color:#a79e86">(no reasoning recorded)</em>';
+      return '<tr><td class="n">'+(i+1)+'</td><td><b>'+esc2(s.title)+'</b><div class="wk">week '+s.week+' · '+esc2(s.skill)+'</div></td>'+
+             '<td class="st">'+status+'</td><td class="rz">'+reason+'</td></tr>';
+    }).join("");
+    var html =
+'<!doctype html><html><head><meta charset="utf-8"><title>Investigation report — '+esc2(sub.student_id)+'</title>'+
+'<style>body{font:14px/1.6 -apple-system,Segoe UI,Roboto,sans-serif;max-width:860px;margin:32px auto;padding:0 18px;color:#23241f}'+
+'h1{font-size:20px;margin:0 0 2px}.sub{color:#6b6459;font-size:13px;margin-bottom:18px}'+
+'table{border-collapse:collapse;width:100%;margin-top:10px}td,th{border:1px solid #e4ddce;padding:8px 10px;vertical-align:top;text-align:left}'+
+'th{background:#f4efe3;font-size:12px;text-transform:uppercase;letter-spacing:.04em}'+
+'.n{width:28px;color:#8a8275}.st{width:92px}.wk{color:#8a8275;font-size:11.5px;font-weight:400;margin-top:2px}'+
+'.rz{white-space:pre-wrap}.summary{margin:20px 0;padding:12px 14px;background:#f8f5ec;border:1px solid #e4ddce;border-radius:4px;white-space:pre-wrap}'+
+'</style></head><body>'+
+'<h1>Network Forensics — Investigation Report</h1>'+
+'<div class="sub">Examiner <b>'+esc2(sub.student_id)+'</b> · Case '+esc2(sub.case_id)+' · '+sub.captured+'/'+sub.total+' findings solved · generated '+esc2(sub.generated)+'</div>'+
+'<h3>Analyst summary</h3><div class="summary">'+(sub.report.summary?esc2(sub.report.summary):'<em style="color:#a79e86">(no summary written)</em>')+'</div>'+
+'<h3>Objectives &amp; reasoning</h3>'+
+'<table><tr><th class="n">#</th><th>Objective</th><th>Status</th><th>Reasoning (examiner\u2019s own words)</th></tr>'+rows+'</table>'+
+'<p style="color:#8a8275;font-size:12px;margin-top:18px">This readable report is for your records. Hand in the <b>.json</b> submission for grading.</p>'+
+'</body></html>';
+    var blob = new Blob([html], {type:"text/html"});
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = "report_"+state.norm+"_"+C.CONFIG.CASE_ID+".html";
+    document.body.appendChild(a); a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 100);
   }
 
   /* ---------------------------- mobile tabs ---------------------------- */
