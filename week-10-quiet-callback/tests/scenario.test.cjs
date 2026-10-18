@@ -1,0 +1,13 @@
+'use strict';
+const assert=require('node:assert/strict'),S=require('../scenario.js');
+assert.equal(S.assets.length,7);assert.equal(new Set(S.events.map(e=>e.id)).size,S.events.length);
+assert.ok(S.events.every((e,i)=>e.t>=0&&e.t<=720&&(!i||e.t>=S.events[i-1].t)));
+const fin=S.events.filter(e=>e.type==='NetFlow'&&e.host==='FIN-WS34'),hr=S.events.filter(e=>e.type==='NetFlow'&&e.host==='HR-WS18');
+const stats=S.statistics(fin.map(e=>e.t));assert.ok(stats.min>=27&&stats.max<=33);assert.ok(stats.mean>29&&stats.mean<31);assert.ok(fin.every(e=>e.bytes<4200));
+assert.equal(S.statistics(hr.map(e=>e.t)).mean,60);assert.equal(S.statistics(hr.map(e=>e.t)).populationSD,0);
+assert.equal(new Set(fin.map(e=>e.destination)).size,2);assert.equal(new Set(fin.map(e=>e.domain)).size,1);assert.ok(fin.some(e=>e.t>450&&e.destination==='203.0.113.117'));
+assert.ok(S.events.filter(e=>e.type==='IDS').every(e=>e.t>=300));assert.ok(S.events.some(e=>e.type==='DNS'&&e.t===450&&e.destination==='203.0.113.117'));
+assert.ok(S.events.filter(e=>e.host==='BACKUP-02'&&e.type==='NetFlow').every(e=>e.bytes>=82000000));
+assert.deepEqual(S.statistics([63,3,32]).intervals,[29,31]);assert.equal(S.statistics([0,0,0]).cv,null);assert.throws(()=>S.statistics([1,2]));assert.throws(()=>S.statistics([1,2,NaN]));
+assert.equal(S.checkpoints.at(-1).at,S.duration);
+console.log(`PASS: ${S.events.length} deterministic events, assets, FIN jitter/IP change, HR timing, backup, alert staging, statistics and edge cases.`);

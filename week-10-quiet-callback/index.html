@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="A synthetic network investigation lab for CYB240. No real C2 traffic.">
+  <title>The Quiet Callback · CYB240</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="scenario.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+<header class="masthead"><div><p class="eyebrow">CYB240 / WEEK 10 / INVESTIGATION LAB</p><h1>The Quiet Callback<span class="dot">.</span></h1><p class="subtitle">Observe. Correlate. Test. Decide.</p></div><span class="badge">SYNTHETIC TELEMETRY ONLY</span></header>
+<main>
+  <section id="brief" class="panel brief">
+    <div><p class="eyebrow">CASE CCNST-2026-1019</p><h2>Your shift starts here</h2>
+    <p>You are beginning a network-monitoring shift after automated monitoring identified an increase in unusual outbound communication. No system has been confirmed compromised.</p>
+    <p>Several systems legitimately generate automated traffic. Monitor the available telemetry and determine whether any activity justifies escalation for suspected command-and-control communication. Repetitive, encrypted, or high-volume traffic alone is not proof of compromise.</p>
+    <p><strong>Environment:</strong> Cochise College simulated enterprise network. DNS, NetFlow, firewall, IDS, TLS metadata, and asset context are available. Endpoint telemetry is not initially available.</p>
+    <p class="muted">12 simulated minutes · 12 / 6 / 3 real minutes at 1× / 2× / 4× · No external requests, accounts, or real targets. All addresses are reserved documentation addresses and all domains use .example.</p></div>
+    <form id="start-form"><label for="student-id">Student ID</label><input id="student-id" required pattern="[a-z]{2,}[0-9]{4}" autocomplete="off" placeholder="chenowetht2026" maxlength="64"><p class="hint">Lowercase lastname + first initial + four-digit year. Omit spaces, punctuation, and diacritics; for example, chenowetht2026. Used only to identify your export.</p><button type="submit" class="primary">Begin investigation →</button><p id="resume-hint" class="hint"></p></form>
+  </section>
+  <div id="workspace" hidden>
+    <section class="panel toolbar" aria-label="Simulation controls"><div><p class="eyebrow">SHIFT CLOCK · SIMULATED UTC</p><strong id="clock" class="clock">10:14:00</strong><span id="run-status" class="badge">PAUSED</span><p id="identity" class="hint"></p></div><div class="controls"><button id="toggle">Resume</button><label for="speed">Speed</label><select id="speed"><option value="1">1×</option><option value="2">2×</option><option value="4">4×</option></select><button id="restart" class="quiet">Restart timeline</button><button id="new-case" class="quiet">New student / clear</button></div><progress id="progress" max="720" value="0" aria-label="Shift progress"></progress><p class="hint full">Pause freezes the simulation; released evidence stays available. Restart rewinds the same timeline and retains your writing. New student clears this browser’s saved case.</p></section>
+    <div class="layout">
+      <div class="evidence-column">
+        <section class="panel evidence"><div class="section-heading"><div><p class="eyebrow">01 / MONITOR</p><h2>Evidence console</h2></div><span id="event-count" class="badge"></span></div>
+          <div id="tabs" class="tabs" role="tablist" aria-label="Evidence sources"></div>
+          <div class="filters"><label>Host<select id="host-filter"><option value="">All hosts</option></select></label><label>Destination / domain<input id="dest-filter" placeholder="IP or domain substring"></label><label>Evidence<select id="type-filter"><option value="">All types</option></select></label><label>From (UTC)<input id="from-filter" type="time" step="1" value="10:14:00"></label><label>Through (UTC)<input id="to-filter" type="time" step="1" value="10:26:00"></label><button id="clear-filters" class="quiet">Reset filters</button></div>
+          <p class="hint">Filters combine with the active tab. Assets shows static inventory; only the host filter applies. Click an evidence ID to add a citation to your next notebook entry.</p><p id="filter-status" role="status" class="hint"></p>
+          <div id="evidence-panel" role="tabpanel" tabindex="0"><div class="table-scroll"><table id="evidence-table"><thead></thead><tbody></tbody></table></div></div>
+        </section>
+        <section class="panel"><p class="eyebrow">02 / MEASURE</p><h2>Interval calculator</h2><p class="hint">Use timestamps from one comparable series of NetFlow events. Mixing sources, hosts, or destinations can distort timing. This tool computes statistics only; it makes no activity classification.</p><label for="timestamps">UTC timestamps (HH:MM:SS) or elapsed seconds, separated by commas or whitespace</label><textarea id="timestamps" rows="3" placeholder="10:14:03, 10:14:32, 10:15:03"></textarea><div class="controls"><button id="use-flows">Use visible NetFlow rows</button><button id="calculate" class="primary">Calculate intervals</button></div><p class="hint">Visible rows means all released rows matching the active tab and filters. Values are sorted; duplicates are retained. No midnight rollover.</p><output id="calc-result" aria-live="polite"></output></section>
+        <section class="panel"><p class="eyebrow">03 / CORRELATE</p><h2>Staged checkpoints</h2><p class="hint">Record your reasoning as context develops. These prompts do not score or validate your conclusions.</p><div id="checkpoints"></div></section>
+        <section class="panel"><p class="eyebrow">04 / TEST A HYPOTHESIS</p><h2>Additional evidence requests</h2><p class="hint">Available after 04:00 elapsed. Choose a source, explain what it would test, then request it. Synthetic responses arrive after 20 simulated seconds; the clock must be running.</p><label for="request-kind">Evidence source</label><select id="request-kind"><option value="change">Change / service records</option><option value="dns">Historical DNS context</option><option value="endpoint">Endpoint triage availability</option><option value="owner">System owner response</option></select><label for="request-reason">Question or hypothesis this request tests</label><textarea id="request-reason" rows="2" maxlength="3000"></textarea><button id="request-evidence">Submit evidence request</button><p id="request-status" role="status"></p><div id="requests"></div></section>
+      </div>
+      <aside class="writing-column">
+        <section class="panel"><p class="eyebrow">FIELD NOTES</p><h2>Investigation notebook</h2><p class="hint">Separate what you saw from what you think it means. Notes and reports autosave on this browser; export before leaving a shared computer.</p><form id="note-form"><label for="observation">Observation</label><textarea id="observation" required rows="3" maxlength="6000"></textarea><label for="interpretation">Interpretation</label><textarea id="interpretation" required rows="3" maxlength="6000"></textarea><label for="note-confidence">Confidence</label><select id="note-confidence"><option>Insufficient Evidence</option><option>Possible</option><option>Likely</option><option>Strongly Supported</option></select><fieldset><legend>Evidence used</legend><div id="evidence-types" class="checks"></div></fieldset><label for="citations">Evidence IDs / request IDs</label><input id="citations" placeholder="E0012, E0013, A-FIN-WS34"><p class="hint">Add IDs from rows or released request responses. At least one evidence type is required.</p><button class="primary" type="submit">Save observation</button><p id="note-status" role="status"></p></form><div id="notes"></div></section>
+        <section class="panel"><p class="eyebrow">05 / DECIDE & REPORT</p><h2>Analyst assessment</h2><label for="decision">Final decision</label><select id="decision"><option value="">Select a decision</option><option>Continue Monitoring</option><option>Escalate for Endpoint Investigation</option><option>Close as Expected Activity</option></select><p class="hint">Write 300–400 words total across the seven sections. Cite evidence, compare alternative explanations, and state what the available telemetry cannot establish.</p><div id="assessment-fields"></div><p id="word-count" role="status">0 / 300–400 words</p><button id="review-report">Check submission completeness</button><p id="report-status" role="status"></p><div class="controls"><button id="export-json" class="primary">Export JSON</button><button id="export-html">Export HTML</button></div><p class="hint">Draft exports are always available. Completeness checks are administrative only; no conclusion is graded in this app.</p><p id="save-status" role="status"></p></section>
+      </aside>
+    </div>
+  </div>
+</main>
+<footer>CYB240 · The Quiet Callback · A simulated investigation, not a compromise verdict.<br>All activity is generated in your browser. Nothing is transmitted.</footer>
+</body></html>

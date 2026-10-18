@@ -1,0 +1,106 @@
+/* Browser-only investigation state and presentation. */
+(() => {
+  'use strict';
+  const S=window.QuietScenario, $=id=>document.getElementById(id);
+  const KEY='quiet-callback-v1', VERSION='1.0.0';
+  const types=['DNS','NetFlow','Firewall','IDS','TLS','Asset Context'];
+  const sections=['Scope','Observations','Correlation','Assessment','Confidence','Limitations','Recommended Next Steps'];
+  const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const stamp=t=>new Date(Date.UTC(2026,9,19,10,14,0)+Math.floor(t)*1000).toISOString().slice(11,19);
+  const elapsed=t=>`${String(Math.floor(t/60)).padStart(2,'0')}:${String(Math.floor(t%60)).padStart(2,'0')}`;
+  const fresh=()=>({version:VERSION,studentId:'',t:0,speed:1,notes:[],checkpoints:{},requests:[],assessment:{},decision:'',draft:{},calculator:{input:'',result:null}});
+  let state=fresh(), running=false, tab='Live', editId=null, last=performance.now(), lastSecond=-1;
+  let storageOK=true;
+  try {const saved=JSON.parse(localStorage.getItem(KEY)); if(saved&&saved.version===VERSION&&Array.isArray(saved.notes)&&Array.isArray(saved.requests))state={...fresh(),...saved};} catch {storageOK=false;}
+  function save(){try{localStorage.setItem(KEY,JSON.stringify(state));storageOK=true;}catch{storageOK=false;}$('save-status').textContent=storageOK?'Saved locally on this browser.':'Local saving is unavailable. Export your work before closing this page.';}
+  function captureDraft(){state.draft={observation:$('observation').value,interpretation:$('interpretation').value,confidence:$('note-confidence').value,citations:$('citations').value,types:[...document.querySelectorAll('#evidence-types input:checked')].map(x=>x.value),requestReason:$('request-reason').value,requestKind:$('request-kind').value};save();}
+  function restoreDraft(){const d=state.draft;['observation','interpretation','citations'].forEach(k=>$(k).value=d[k]||'');$('note-confidence').value=d.confidence||'Insufficient Evidence';document.querySelectorAll('#evidence-types input').forEach(x=>x.checked=(d.types||[]).includes(x.value));$('request-reason').value=d.requestReason||'';$('request-kind').value=d.requestKind||'change';}
+  function released(){return S.events.filter(e=>e.t<=state.t);}
+  function filtered(){const host=$('host-filter').value, dest=$('dest-filter').value.toLowerCase().trim(),type=$('type-filter').value;
+    const from=$('from-filter').value,to=$('to-filter').value;
+    const normalize=v=>v.length===5?v+':00':v;
+    if(from&&to&&normalize(from)>normalize(to))return [];
+    return released().filter(e=>(tab==='Live'||e.type===tab)&&(!host||e.host===host||e.sensor===host)&&(!type||type===e.type)&&(!dest||(e.destination+' '+(e.domain||'')).toLowerCase().includes(dest))&&(!from||stamp(e.t)>=normalize(from))&&(!to||stamp(e.t)<=normalize(to)));
+  }
+  function cite(id,type){const input=$('citations'),ids=input.value.split(/[,\s]+/).filter(Boolean);if(!ids.includes(id))ids.push(id);input.value=ids.join(', ');const box=[...document.querySelectorAll('#evidence-types input')].find(x=>x.value===type);if(box)box.checked=true;captureDraft();$('note-status').textContent=`${id} added to notebook citations.`;}
+  function renderEvidence(){
+    const table=$('evidence-table'), head=table.querySelector('thead'),body=table.querySelector('tbody');
+    $('event-count').textContent=`${released().length} RELEASED`;
+    if(tab==='Assets') {
+      const rows=S.assets.filter(a=>!$('host-filter').value||a.host===$('host-filter').value);
+      head.innerHTML='<tr><th scope="col">Evidence ID</th><th scope="col">Host / IP</th><th scope="col">Role / owner</th><th scope="col">Context</th></tr>';
+      body.innerHTML=rows.map(a=>`<tr><td><button data-cite="${a.id}" data-type="Asset Context">${a.id}</button></td><td>${a.host}<br>${a.ip}</td><td>${a.role}<br>${a.owner}</td><td>${a.context}</td></tr>`).join('');
+      $('filter-status').textContent=`${rows.length} assets. Destination, evidence, and time filters do not apply to inventory.`;
+    }else{
+      const rows=filtered().slice().reverse();
+      head.innerHTML='<tr><th scope="col">Evidence ID</th><th scope="col">UTC / source</th><th scope="col">Host / destination</th><th scope="col">Telemetry</th></tr>';
+      body.innerHTML=rows.length?rows.map(e=>`<tr><td><button data-cite="${e.id}" data-type="${e.type}">${e.id}</button></td><td>${stamp(e.t)}<br>${e.type}<br><span class="muted">${e.sensor}</span></td><td>${e.host}<br>${e.destination}</td><td>${escape(e.details)}</td></tr>`).join(''):'<tr><td colspan="4">No released evidence matches this view. Allow the clock to advance or adjust your filters.</td></tr>';
+      $('filter-status').textContent=`${rows.length} matching events · newest first · simulated date 2026-10-19.`;
+    }
+    body.querySelectorAll('[data-cite]').forEach(b=>b.onclick=()=>cite(b.dataset.cite,b.dataset.type));
+  }
+  function renderCheckpoints(){
+    S.checkpoints.forEach((cp,i)=>{const unlocked=state.t>=cp.at,box=$('cp-'+i);box.querySelector('.cp-status').textContent=unlocked?'Available':`Opens at ${elapsed(cp.at)} elapsed`;box.querySelector('.cp-content').hidden=!unlocked;});
+  }
+  function renderRequests(){
+    $('request-evidence').disabled=state.t<240;
+    $('requests').innerHTML=state.requests.map(r=>`<article class="request"><h3>${escape(r.id)} · ${escape(r.label)}</h3><p class="hint">Requested ${stamp(r.at)} · ${r.due<=state.t?'Released '+stamp(r.due):'Pending until '+stamp(r.due)}</p><p><strong>Question:</strong> ${escape(r.reason)}</p>${r.due<=state.t?`<p>${escape(S.responses[r.kind])}</p><button data-request-cite="${r.id}">Cite ${r.id}</button>`:'<p class="muted">Response not yet released.</p>'}</article>`).join('');
+    document.querySelectorAll('[data-request-cite]').forEach(b=>b.onclick=()=>cite(b.dataset.requestCite,'Asset Context'));
+  }
+  function renderClock(){
+    $('clock').textContent=stamp(state.t);$('progress').value=state.t;
+    $('run-status').textContent=state.t>=S.duration?'SHIFT COMPLETE':running?'RUNNING':'PAUSED';
+    $('toggle').textContent=running?'Pause':'Resume';$('toggle').disabled=state.t>=S.duration;
+    $('identity').textContent=`Analyst ${state.studentId} · ${elapsed(state.t)} / 12:00 elapsed`;
+  }
+  function refresh(){renderClock();renderEvidence();renderCheckpoints();renderRequests();}
+  function showWorkspace(){ $('brief').hidden=true;$('workspace').hidden=false;$('speed').value=state.speed;restoreDraft();$('decision').value=state.decision;sections.forEach((name,i)=>$('assessment-'+i).value=state.assessment[name]||'');S.checkpoints.forEach((cp,i)=>$('checkpoint-'+i).value=state.checkpoints[i]||'');$('timestamps').value=state.calculator.input||'';if(state.calculator.result)showStatistics(state.calculator.result);renderNotes();wordCount();refresh();save(); }
+  function renderNotes(){
+    $('notes').innerHTML=state.notes.map(n=>`<article class="entry"><h3>Observation ${escape(n.id)}</h3><p class="meta">${stamp(n.at)} · ${escape(n.confidence)}</p><p><strong>Observed:</strong> ${escape(n.observation)}</p><p><strong>Interpretation:</strong> ${escape(n.interpretation)}</p><p class="hint">${n.types.map(escape).join(', ')}<br>Citations: ${escape(n.citations||'None recorded')}</p><button data-edit="${n.id}">Edit</button><button data-delete="${n.id}" class="quiet">Delete</button></article>`).join('');
+    document.querySelectorAll('[data-edit]').forEach(b=>b.onclick=()=>{const n=state.notes.find(n=>n.id===Number(b.dataset.edit));editId=n.id;state.draft={...state.draft,...n};restoreDraft();$('observation').focus();$('note-status').textContent=`Editing observation ${n.id}. Save to replace it.`;});
+    document.querySelectorAll('[data-delete]').forEach(b=>b.onclick=()=>{if(!confirm('Delete this notebook observation?'))return;state.notes=state.notes.filter(n=>n.id!==Number(b.dataset.delete));if(editId===Number(b.dataset.delete))editId=null;save();renderNotes();});
+  }
+  function wordCount(){const count=Object.values(state.assessment).join(' ').trim().split(/\s+/).filter(Boolean).length;$('word-count').textContent=`${count} / 300–400 words`;return count;}
+  function completeness(){const issues=[];if(state.t<S.duration)issues.push('Finish the simulated shift.');if(!state.notes.length)issues.push('Save at least one notebook observation.');S.checkpoints.forEach((cp,i)=>{if(!(state.checkpoints[i]||'').trim())issues.push(`Respond to checkpoint ${i+1}.`);});if(!state.requests.some(r=>r.due<=state.t))issues.push('Obtain at least one additional evidence response.');if(!state.decision)issues.push('Select a final decision.');sections.forEach(s=>{if(!(state.assessment[s]||'').trim())issues.push(`Complete ${s}.`);});const n=wordCount();if(n<300||n>400)issues.push('Bring the assessment total to 300–400 words.');return issues;}
+  function showStatistics(r){$('calc-result').textContent=`${r.samples} timestamps · ${r.intervals.length} intervals\nMean ${r.mean.toFixed(2)} s · Median ${r.median.toFixed(2)} s\nMin ${r.min.toFixed(2)} s · Max ${r.max.toFixed(2)} s\nPopulation standard deviation ${r.populationSD.toFixed(2)} s · CV ${r.cv===null?'undefined (zero mean)':(r.cv*100).toFixed(2)+'%'}\nDuplicate timestamps: ${r.duplicates}\nIntervals (seconds): ${r.intervals.join(', ')}`;}
+  function calculate(){try{
+    const tokens=$('timestamps').value.trim().split(/[\s,]+/).filter(Boolean);
+    const values=tokens.map(v=>{if(/^\d+(\.\d+)?$/.test(v))return Number(v);if(!/^\d{2}:\d{2}:\d{2}$/.test(v))throw new Error('Use HH:MM:SS or nonnegative seconds only.');const [h,m,s]=v.split(':').map(Number);if(h>23||m>59||s>59)throw new Error('A timestamp is outside the valid clock range.');return h*3600+m*60+s;});
+    if(tokens.some(v=>v.includes(':'))&&tokens.some(v=>!v.includes(':')))throw new Error('Use one input format per calculation.');
+    const result=S.statistics(values);state.calculator={input:$('timestamps').value,result};showStatistics(result);save();
+  }catch(e){state.calculator={input:$('timestamps').value,result:null};$('calc-result').textContent=e.message;save();}}
+  function exportData(){const issues=completeness();return {schemaVersion:1,appVersion:VERSION,caseId:'CCNST-2026-1019',studentId:state.studentId,exportedAt:new Date().toISOString(),simulationDate:'2026-10-19',simulationElapsedSeconds:state.t,simulationClockUTC:stamp(state.t),status:issues.length?'Draft':'Complete',completenessIssues:issues,decision:state.decision,assessment:state.assessment,assessmentWordCount:wordCount(),notebook:state.notes,unsavedNotebookDraft:state.draft,checkpoints:S.checkpoints.map((c,i)=>({...c,response:state.checkpoints[i]||'',available:state.t>=c.at})),additionalEvidence:state.requests.map(r=>({...r,response:r.due<=state.t?S.responses[r.kind]:null,status:r.due<=state.t?'Released':'Pending'})),calculator:state.calculator,assets:S.assets,releasedEvidence:released(),limitations:'Synthetic network metadata only. No payload inspection or endpoint compromise confirmation. No automated grading.'};}
+  function htmlReport(d){
+    const p=v=>`<p>${escape(v).replace(/\n/g,'<br>')}</p>`;
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>The Quiet Callback — ${escape(d.studentId)}</title><style>body{font:16px/1.6 system-ui,sans-serif;max-width:1000px;padding:32px;margin:auto;color:#172c38}h1,h2{color:#125c57}section,article{border-top:1px solid #ccd8de;margin-top:22px;padding-top:12px}table{border-collapse:collapse;width:100%;font-size:12px}td,th{padding:6px;border:1px solid #ccd8de;text-align:left;overflow-wrap:anywhere}p{white-space:normal}pre{white-space:pre-wrap}@media print{body{padding:0}h2,h3{break-after:avoid}tr{break-inside:avoid}}</style></head><body><h1>The Quiet Callback</h1>${p(`Case ${d.caseId} | Student ${d.studentId} | ${d.status}`)}${p(`Exported ${d.exportedAt} | Simulated UTC ${d.simulationClockUTC} | ${d.assessmentWordCount} assessment words`)}${p('Final decision: '+(d.decision||'Not selected'))}${d.completenessIssues.length?'<h2>Completion items</h2><ul>'+d.completenessIssues.map(i=>'<li>'+escape(i)+'</li>').join('')+'</ul>':''}<h2>Analyst assessment</h2>${sections.map(s=>'<section><h3>'+s+'</h3>'+p(d.assessment[s]||'Not entered')+'</section>').join('')}<h2>Investigation notebook</h2>${d.notebook.map(n=>`<article><h3>Observation ${n.id} · ${stamp(n.at)}</h3>${p('Observation: '+n.observation)}${p('Interpretation: '+n.interpretation)}${p('Confidence: '+n.confidence)}${p('Evidence: '+n.types.join(', ')+' | '+n.citations)}</article>`).join('')}<h2>Notebook draft (not submitted as an observation)</h2>${p(d.unsavedNotebookDraft.observation||'None')}${p(d.unsavedNotebookDraft.interpretation||'')}<h2>Checkpoints</h2>${d.checkpoints.map(c=>'<section><h3>'+escape(c.title)+'</h3>'+p(c.prompt)+p(c.response||'Not entered')+'</section>').join('')}<h2>Additional evidence requests</h2>${d.additionalEvidence.map(r=>'<article><h3>'+escape(r.id+' · '+r.label)+'</h3>'+p('Requested '+stamp(r.at)+' | '+r.status)+p(r.reason)+p(r.response||'Response pending')+'</article>').join('')}<h2>Interval calculation</h2>${p('Input: '+d.calculator.input)}<pre>${escape(JSON.stringify(d.calculator.result,null,2))}</pre><h2>Asset inventory</h2>${d.assets.map(a=>p(a.id+' | '+a.ip+' | '+a.role+' | '+a.context)).join('')}<h2>Released evidence appendix</h2><table><thead><tr><th>ID</th><th>UTC</th><th>Type / sensor</th><th>Host / destination</th><th>Details</th></tr></thead><tbody>${d.releasedEvidence.map(e=>`<tr><td>${e.id}</td><td>${stamp(e.t)}</td><td>${e.type} / ${e.sensor}</td><td>${e.host} / ${e.destination}</td><td>${escape(e.details)}</td></tr>`).join('')}</tbody></table>${p(d.limitations)}</body></html>`;
+  }
+  function download(kind){captureDraft();const data=exportData(),content=kind==='json'?JSON.stringify(data,null,2):htmlReport(data),blob=new Blob([content],{type:kind==='json'?'application/json':'text/html;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`quiet-callback-${state.studentId}-${data.status.toLowerCase()}.${kind}`;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);$('report-status').textContent=`${data.status} ${kind.toUpperCase()} export prepared. Check your browser downloads.`;}
+  // Build stable controls once so periodic evidence updates never steal focus from writing.
+  ['Live','DNS','NetFlow','Firewall','IDS','TLS','Assets'].forEach(name=>{const b=document.createElement('button');b.textContent=name;b.id='tab-'+name;b.setAttribute('role','tab');b.setAttribute('aria-controls','evidence-panel');b.setAttribute('aria-selected',String(name===tab));b.tabIndex=name===tab?0:-1;b.onclick=()=>{tab=name;document.querySelectorAll('#tabs button').forEach(x=>{x.setAttribute('aria-selected',String(x===b));x.tabIndex=x===b?0:-1;});$('evidence-panel').setAttribute('aria-labelledby',b.id);renderEvidence();};$('tabs').append(b);});
+  $('evidence-panel').setAttribute('aria-labelledby','tab-Live');
+  $('tabs').onkeydown=e=>{const buttons=[...$('tabs').children];let i=buttons.indexOf(document.activeElement);if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();i=e.key==='Home'?0:e.key==='End'?buttons.length-1:(i+(e.key==='ArrowRight'?1:-1)+buttons.length)%buttons.length;buttons[i].focus();buttons[i].click();};
+  S.assets.forEach(a=>$('host-filter').add(new Option(a.host,a.host)));
+  types.filter(t=>t!=='Asset Context').forEach(t=>$('type-filter').add(new Option(t,t)));
+  types.forEach(t=>{const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.value=t;label.append(input,document.createTextNode(t));$('evidence-types').append(label);});
+  sections.forEach((name,i)=>{const label=document.createElement('label');label.htmlFor='assessment-'+i;label.textContent=name;const field=document.createElement('textarea');field.id=label.htmlFor;field.rows=3;field.maxLength=10000;field.oninput=()=>{state.assessment[name]=field.value;wordCount();save();};$('assessment-fields').append(label,field);});
+  S.checkpoints.forEach((cp,i)=>{const div=document.createElement('article');div.className='checkpoint';div.id='cp-'+i;div.innerHTML=`<h3>${i+1}. ${cp.title}</h3><p class="cp-status hint"></p><div class="cp-content" hidden><label for="checkpoint-${i}">${cp.prompt}</label><textarea id="checkpoint-${i}" rows="3" maxlength="6000"></textarea></div>`;$('checkpoints').append(div);$('checkpoint-'+i).oninput=e=>{state.checkpoints[i]=e.target.value;save();};});
+  ['host-filter','dest-filter','type-filter','from-filter','to-filter'].forEach(id=>$(id).oninput=renderEvidence);
+  $('clear-filters').onclick=()=>{['host-filter','dest-filter','type-filter'].forEach(id=>$(id).value='');$('from-filter').value='10:14:00';$('to-filter').value='10:26:00';renderEvidence();};
+  $('start-form').onsubmit=e=>{e.preventDefault();const id=$('student-id').value.trim();if(!/^[a-z]{2,}\d{4}$/.test(id)){return;}state.studentId=id;running=true;last=performance.now();showWorkspace();};
+  $('toggle').onclick=()=>{running=!running;last=performance.now();renderClock();save();};
+  $('speed').onchange=e=>{state.speed=Number(e.target.value);last=performance.now();save();};
+  $('restart').onclick=()=>{if(!confirm('Rewind the same timeline? Your notebook, checkpoint responses, requests, and assessment will be retained. Request responses will release again at their original times.'))return;state.t=0;running=false;lastSecond=-1;refresh();save();};
+  $('new-case').onclick=()=>{if(!confirm('Clear all locally saved writing and start a new student case? Export your work first.'))return;state=fresh();running=false;editId=null;save();location.reload();};
+  $('note-form').oninput=captureDraft;$('request-reason').oninput=captureDraft;$('request-kind').onchange=captureDraft;
+  $('note-form').onsubmit=e=>{e.preventDefault();captureDraft();const d=state.draft;if(!d.observation.trim()||!d.interpretation.trim()||!d.types.length){$('note-status').textContent='Add an observation, interpretation, and at least one evidence type.';return;}const ids=d.citations.split(/[,\s]+/).filter(Boolean),allowed=new Set([...released(),...S.assets,...state.requests.filter(r=>r.due<=state.t)].map(x=>x.id));if(ids.some(id=>!allowed.has(id))){$('note-status').textContent='Use evidence IDs that have been released in this timeline, or leave citations blank.';return;}const note={id:editId||Math.max(0,...state.notes.map(n=>n.id))+1,at:state.t,observation:d.observation,interpretation:d.interpretation,confidence:d.confidence,types:d.types,citations:d.citations};if(editId)state.notes=state.notes.map(n=>n.id===editId?note:n);else state.notes.push(note);editId=null;state.draft={...d,observation:'',interpretation:'',citations:'',types:[]};restoreDraft();save();renderNotes();$('note-status').textContent='Observation saved. No conclusion has been scored.';};
+  $('request-evidence').onclick=()=>{if(state.t<240)return;const kind=$('request-kind').value,reason=$('request-reason').value.trim();if(!reason){$('request-status').textContent='Explain the question this request would test.';return;}if(state.requests.some(r=>r.kind===kind)){$('request-status').textContent='This source has already been requested. Review the existing response.';return;}if(state.t>S.duration-20){$('request-status').textContent='The response window has closed. Record this as a limitation and a recommended next step.';return;}state.requests.push({id:'R'+String(state.requests.length+1).padStart(2,'0'),kind,label:$('request-kind').selectedOptions[0].text,reason,at:state.t,due:state.t+20});$('request-status').textContent='Request queued. Response due in 20 simulated seconds.';save();renderRequests();};
+  $('use-flows').onclick=()=>{$('timestamps').value=filtered().filter(e=>e.type==='NetFlow').map(e=>stamp(e.t)).join(', ');state.calculator={input:$('timestamps').value,result:null};$('calc-result').textContent='Timestamps copied. Check the series, then calculate.';save();};
+  $('timestamps').oninput=()=>{state.calculator={input:$('timestamps').value,result:null};$('calc-result').textContent='';save();};$('calculate').onclick=calculate;
+  $('decision').onchange=e=>{state.decision=e.target.value;save();};
+  $('review-report').onclick=()=>{const issues=completeness();$('report-status').textContent=issues.length?issues.join(' '):'Submission fields are complete. This does not evaluate your conclusion or evidence quality.';};
+  $('export-json').onclick=()=>download('json');$('export-html').onclick=()=>download('html');
+  if(state.studentId)showWorkspace();else $('resume-hint').textContent=storageOK?'Your work is saved locally as you investigate.':'Browser storage is unavailable; use exports to preserve your work.';
+  document.addEventListener('visibilitychange',()=>{if(document.hidden&&running){running=false;renderClock();save();}});
+  window.addEventListener('pagehide',save);
+  setInterval(()=>{const now=performance.now(),delta=(now-last)/1000;last=now;if(!running)return;state.t=Math.min(S.duration,state.t+delta*state.speed);if(state.t>=S.duration)running=false;if(Math.floor(state.t)!==lastSecond){lastSecond=Math.floor(state.t);refresh();save();}},200);
+})();
